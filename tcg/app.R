@@ -41,7 +41,7 @@ thematic_shiny()
 
 here::here()
 
-# Define UI for application that draws a histogram
+# Define UI ----
 
 ui <- bslib::page_fluid(
   
@@ -56,7 +56,23 @@ ui <- bslib::page_fluid(
                 title = 'Home',
                 fillable = T,
                 
-                page_fillable(
+                layout_sidebar(fillable = T,
+                               fill = T,
+                               width = '30%',
+                               
+                               sidebar = sidebar(
+                                 
+                                 materialSwitch('bulk', label = tags$span(
+                                   'Include Bulk?', 
+                                   tooltip(
+                                     bsicons::bs_icon('question-circle'),
+                                     'Selecting yes will include cards with TCG Low Prices below 50 cents.',
+                                     placement = 'right', options = list(template = '<div class="tooltip" role="tooltip"><div class="tooltip-arrow"></div><div class="tooltip-inner" style="text-align: left"></div></div>')
+                                   )
+                                 ),
+                                 status = 'primary')
+                              
+                               ),
                   
                   card(
                    
@@ -79,46 +95,61 @@ ui <- bslib::page_fluid(
   )
 )
 
-# Define server logic required to draw a histogram
+# Server ----
 
 server <- function(input, output) {
 
     data <- reactive({
       req(input$upload)
       
+      if(!input$bulk) {
+        ext <- tools::file_ext(input$upload$name)
+        switch(ext,
+               csv = vroom::vroom(input$upload$datapath, delim = ','),
+               validate("Invalid file extension. Only .csv files are accepted.")) %>% 
+          filter(`Total Quantity` != 0,
+                 `TCG Low Price` > 0.50)
+      } else {
+      
       ext <- tools::file_ext(input$upload$name)
       switch(ext,
              csv = vroom::vroom(input$upload$datapath, delim = ','),
-             validate("Invalid file extension. Only .csv files are accepted."))
+             validate("Invalid file extension. Only .csv files are accepted.")) %>% 
+        filter(`Total Quantity` != 0)
+      }
     })
     
     products <- reactive({
       req(input$upload)
       
       a <- data() %>% 
-        filter(`Total Quantity` != 0) %>% 
         summarise(Count = sum(`Total Quantity`), .by = `Product Line`) %>% 
         ggplot() +
         geom_bar(aes(x = Count, y = `Product Line`, fill = `Product Line`), stat = 'identity') +
         geom_label(aes(x = Count, y = `Product Line`, label = Count)) +
-        labs(y = 'Product Line') +
-        theme(axis.title.x = element_blank()) +
+        labs(y = 'Product Line')  +
         theme_bw() +
-        scale_fill_frontiers() 
+        scale_fill_frontiers() +
+        theme(axis.title.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text = element_text(size = 14, face = 'bold'),
+              legend.text = element_text(size = 14))
       
       b <- data() %>% 
-        filter(`Total Quantity` != 0) %>% 
         summarise(Count = sum(`Total Quantity`), .by = `Product Line`) %>% 
         ggplot() +
         geom_bar(aes(x = '', y = Count, fill = `Product Line`), stat = 'identity', width = 1) +
         coord_polar('y', start = 0) +
-        labs(y = NULL, x = NULL) +
-        theme(axis.text.y = element_blank(),
-              axis.title.y = element_blank()) +
+        labs(y = NULL, x = NULL)  +
+        geom_label_repel(aes(x = '', y = Count, label = `Product Line`)) +
         theme_bw() +
-        scale_fill_frontiers() 
+        scale_fill_frontiers() +
+        theme(axis.text = element_blank(),
+              axis.title.y = element_blank(),
+              axis.ticks = element_blank(),
+              legend.text = element_text(size = 14))
       
-      a + b + theme(legend.text = element_text(size = 14)) + plot_layout(nrow = 1, ncol = 2, guides = 'collect') 
+      a + b + plot_layout(nrow = 1, ncol = 2, guides = 'collect')
      
       })
     
@@ -126,29 +157,32 @@ server <- function(input, output) {
       req(input$upload)
       
       a <- data() %>% 
-        filter(`Total Quantity` != 0) %>% 
         summarise(Price = sum(`TCG Low Price`, na.rm = T), .by = `Product Line`) %>% 
         na.omit() %>% 
         ggplot() +
         geom_bar(aes(x = Price, y = `Product Line`, fill = `Product Line`), stat = 'identity') +
         geom_label(aes(x = Price, y = `Product Line`, label = Price)) +
         labs(y = 'Product Line') +
-        theme(axis.title.x = element_blank()) +
         theme_bw() +
-        scale_fill_frontiers() 
+        scale_fill_frontiers() +
+        theme(axis.title.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text = element_text(size = 14, face = 'bold'),
+              legend.text = element_text(size = 14))
       
       b <- data() %>% 
-        filter(`Total Quantity` != 0) %>% 
         summarise(Price = sum(`TCG Low Price`, na.rm = T), .by = `Product Line`) %>%
         na.omit() %>% 
         ggplot() +
         geom_bar(aes(x = '', y = Price, fill = `Product Line`), stat = 'identity', width = 1) +
         coord_polar('y', start = 0) +
         labs(y = NULL, x = NULL) +
-        theme(axis.text.y = element_blank(),
-              axis.title.y = element_blank()) +
         theme_bw() +
-        scale_fill_frontiers() 
+        scale_fill_frontiers() +
+        theme(axis.text = element_blank(),
+              axis.title.y = element_blank(),
+              axis.ticks = element_blank(),
+              legend.text = element_text(size = 14))
       
       a + b + plot_layout(nrow = 1, ncol = 2, guides = 'collect')
       
@@ -157,8 +191,7 @@ server <- function(input, output) {
     value <- reactive({
       req(input$upload)
       
-      a <- data() %>% 
-        filter(`Total Quantity` != 0) %>% 
+      a <- data() %>%
         mutate(Rate = case_when(`TCG Low Price` > 50 ~ 'High End',
                                             between(`TCG Low Price`, 5, 50) ~ 'Decent',
                                             between(`TCG Low Price`, 1, 5) ~ 'Trade',
@@ -170,12 +203,14 @@ server <- function(input, output) {
         geom_bar(aes(x = Price, y = Rate, fill = Rate), stat = 'identity') +
         geom_label(aes(x = Price, y = Rate, label = Price)) +
         labs(y = 'Product Line') +
-        theme(axis.title.x = element_blank()) +
         theme_bw() +
-        scale_fill_frontiers() 
+        scale_fill_frontiers() +
+        theme(axis.title.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text = element_text(size = 14, face = 'bold'),
+              legend.text = element_text(size = 14))
       
       b <- data() %>% 
-        filter(`Total Quantity` != 0) %>% 
         mutate(Rate = case_when(`TCG Low Price` > 50 ~ 'High End',
                                 between(`TCG Low Price`, 5, 50) ~ 'Decent',
                                 between(`TCG Low Price`, 1, 5) ~ 'Trade',
@@ -187,10 +222,12 @@ server <- function(input, output) {
         geom_bar(aes(x = '', y = Price, fill = `Rate`), stat = 'identity', width = 1) +
         coord_polar('y', start = 0) +
         labs(y = NULL, x = NULL) +
-        theme(axis.text.y = element_blank(),
-              axis.title.y = element_blank()) +
         theme_bw() +
-        scale_fill_frontiers() 
+        scale_fill_frontiers() +
+        theme(axis.text = element_blank(),
+              axis.title.y = element_blank(),
+              axis.ticks = element_blank(),
+              legend.text = element_text(size = 14))
       
       a + b + plot_layout(nrow = 1, ncol = 2, guides = 'collect')
       
