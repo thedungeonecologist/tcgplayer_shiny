@@ -118,7 +118,7 @@ server <- function(input, output) {
         theme_bw() +
         scale_fill_frontiers() 
       
-      a + b + plot_layout(nrow = 1, ncol = 2, guides = 'collect')
+      a + b + theme(legend.text = element_text(size = 14)) + plot_layout(nrow = 1, ncol = 2, guides = 'collect') 
      
       })
     
